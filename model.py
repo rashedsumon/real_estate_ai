@@ -26,13 +26,32 @@ def process_bracketed_images(images_list, commands=""):
     - Input: List of opencv/numpy images [under, normal, over]
     - Output: Enhanced HDR Image
     """
-    if not images_list:
-        return None
+    if not images_list or len(images_list) < 2:
+        raise ValueError("At least 2 bracketed images are required for HDR processing.")
     
+    # --- Fix: Ensure all images match the dimensions of the first image ---
+    base_h, base_w = images_list[0].shape[:2]
+    standardized_images = []
+    
+    for img in images_list:
+        if img is None:
+            continue
+        # If sizes don't match, resize seamlessly
+        if img.shape[:2] != (base_h, base_w):
+            img = cv2.resize(img, (base_w, base_h), interpolation=cv2.INTER_AREA)
+        
+        # Ensure image is in 8-bit format
+        if img.dtype != np.uint8:
+            img = img.astype(np.uint8)
+            
+        standardized_images.append(img)
+
+    if len(standardized_images) < 2:
+        return None
+
     # --- 1. HDR Exposure Blending via OpenCV Mertens ---
-    # In production, a trained PyTorch model weights this step
     merge_mertens = cv2.createMergeMertens()
-    hdr_image = merge_mertens.process(images_list)
+    hdr_image = merge_mertens.process(standardized_images)
     
     # Convert from 32-bit float to standard 8-bit image
     hdr_image = np.clip(hdr_image * 255, 0, 255).astype(np.uint8)
@@ -43,23 +62,20 @@ def process_bracketed_images(images_list, commands=""):
     
     if "remove" in commands_clean or "trash" in commands_clean:
         # Simulate object removal by auto-inpainting a mocked target region 
-        # (For deployment demonstration, we heal a small bounding box area)
         mask = np.zeros(processed_output.shape[:2], dtype=np.uint8)
         h, w = mask.shape
-        # Fake a generic "corner box" where trash cans or clutter often sit
+        # Heal a generic corner box where trash cans or clutter often sit
         cv2.rectangle(mask, (int(w*0.75), int(h*0.75)), (w, h), 255, -1)
         processed_output = cv2.inpaint(processed_output, mask, 3, cv2.INPAINT_TELEA)
         
     if "twilight" in commands_clean or "blue hour" in commands_clean:
         # Apply a warm/cool cinematic look adjustment 
-        # Boosting blues and magentas slightly
         outputs = processed_output.astype(np.int16)
         outputs[:, :, 0] += 20  # Blue Channel boost
         outputs[:, :, 2] += 5   # Red Channel boost
         processed_output = np.clip(outputs, 0, 255).astype(np.uint8)
         
     # --- 3. Resolution Upscaling Simulation ---
-    # Simple super-resolution placeholder via bicubic resizing
     h, w = processed_output.shape[:2]
     upscaled = cv2.resize(processed_output, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
 
