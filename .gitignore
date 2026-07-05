@@ -1,0 +1,15 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Local environments
+.venv/
+venv/
+env/
+
+# Streamlit local configuration
+.streamlit/
+
+# Kagglehub cache / data downloads
+.cache/
+data/
